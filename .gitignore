@@ -1,0 +1,29 @@
+# Claude Code
+.claude/
+
+# Maven
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.properties
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+backend/src/main/resources/application-local.properties
+
+# Logs
+*.log
+logs/
