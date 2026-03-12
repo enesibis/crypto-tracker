@@ -16,14 +16,18 @@ public class CoinGeckoClient {
     private final WebClient coinGeckoWebClient;
 
     public List<CoinGeckoMarketDto> getTopCoins(int limit) {
-        log.info("CoinGecko API'den top {} coin çekiliyor...", limit);
+        return getCoinsPage(limit, 1);
+    }
+
+    public List<CoinGeckoMarketDto> getCoinsPage(int perPage, int page) {
+        log.info("CoinGecko API'den sayfa {} çekiliyor (perPage={})...", page, perPage);
         return coinGeckoWebClient.get()
                 .uri(uri -> uri
                         .path("/coins/markets")
                         .queryParam("vs_currency", "usd")
                         .queryParam("order", "market_cap_desc")
-                        .queryParam("per_page", limit)
-                        .queryParam("page", 1)
+                        .queryParam("per_page", perPage)
+                        .queryParam("page", page)
                         .queryParam("sparkline", false)
                         .build())
                 .retrieve()
