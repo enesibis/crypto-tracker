@@ -15,4 +15,12 @@ public class WebClientConfig {
                 .defaultHeader("Accept", "application/json")
                 .build();
     }
+
+    @Bean
+    public WebClient cryptoCompareWebClient(@Value("${app.cryptocompare.base-url}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("Accept", "application/json")
+                .build();
+    }
 }

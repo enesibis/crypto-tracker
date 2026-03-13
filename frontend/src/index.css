@@ -69,6 +69,47 @@
   animation: fadeIn 0.25s ease;
 }
 
+.animate-fade-in {
+  animation: fadeSlideIn 0.3s ease both;
+}
+
+@keyframes starPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.5) rotate(-15deg); }
+  70%  { transform: scale(0.9) rotate(10deg); }
+  100% { transform: scale(1.1) rotate(0deg); }
+}
+
+@keyframes starUnpop {
+  0%   { transform: scale(1.1); }
+  50%  { transform: scale(0.8); }
+  100% { transform: scale(1); }
+}
+
+.star-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+}
+
+.star-btn:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.star-btn.watched {
+  animation: starPop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.star-btn.unwatched-anim {
+  animation: starUnpop 0.25s ease both;
+}
+
 .logo-enter {
   animation: logoEnter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

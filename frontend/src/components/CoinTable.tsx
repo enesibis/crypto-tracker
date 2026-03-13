@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Coin } from '../types/coin';
 import { useWatchlist } from '../hooks/useWatchlist';
 
@@ -37,6 +38,7 @@ function SortIcon({ field, sortBy, sortDir }: { field: SortField; sortBy: SortFi
 }
 
 export default function CoinTable() {
+  const navigate = useNavigate();
   const [data, setData] = useState<PagedResponse | null>(null);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
@@ -48,7 +50,14 @@ export default function CoinTable() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showWatchlist, setShowWatchlist] = useState(false);
   const prevPrices = useRef<Record<string, number>>({});
+  const [animatingId, setAnimatingId] = useState<string | null>(null);
   const { watchlist, isWatched, toggle, updatePrices } = useWatchlist();
+
+  function handleToggle(coin: Coin) {
+    toggle(coin);
+    setAnimatingId(coin.id);
+    setTimeout(() => setAnimatingId(null), 400);
+  }
 
   const fetchCoins = useCallback(async (p: number, q: string, field: SortField, dir: SortDir) => {
     try {
@@ -115,18 +124,33 @@ export default function CoinTable() {
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <button
             onClick={() => setShowWatchlist(false)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={!showWatchlist ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}
-          >Tüm Coinler</button>
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+            style={!showWatchlist
+              ? { background: 'var(--accent)', color: '#fff', boxShadow: '0 0 12px rgba(59,130,246,0.4)' }
+              : { color: 'var(--text-muted)' }}
+            onMouseEnter={e => { if (showWatchlist) e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { if (showWatchlist) e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            Tüm Coinler
+          </button>
           <button
             onClick={() => setShowWatchlist(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5"
-            style={showWatchlist ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+            style={showWatchlist
+              ? { background: 'var(--accent)', color: '#fff', boxShadow: '0 0 12px rgba(59,130,246,0.4)' }
+              : { color: 'var(--text-muted)' }}
+            onMouseEnter={e => { if (!showWatchlist) e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { if (!showWatchlist) e.currentTarget.style.color = 'var(--text-muted)'; }}
           >
-            ★ Watchlist
+            <span style={{ fontSize: '12px' }}>★</span>
+            Watchlist
             {watchlist.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-xs font-bold"
-                style={{ background: showWatchlist ? 'rgba(255,255,255,0.25)' : 'var(--accent)', color: '#fff', fontSize: '10px' }}>
+              <span className="px-1.5 py-0.5 rounded-full font-bold"
+                style={{ background: showWatchlist ? 'rgba(255,255,255,0.25)' : 'rgba(59,130,246,0.15)', color: showWatchlist ? '#fff' : 'var(--accent)', fontSize: '10px' }}>
                 {watchlist.length}
               </span>
             )}
@@ -200,21 +224,16 @@ export default function CoinTable() {
                 return (
                   <tr key={`${tableKey}-${coin.id}`}
                     className={`row-enter ${flashClass}`}
-                    style={{ borderBottom: '1px solid var(--border)', animationDelay: `${index * 30}ms` }}
+                    style={{ borderBottom: '1px solid var(--border)', animationDelay: `${index * 30}ms`, cursor: 'pointer' }}
+                    onClick={() => navigate(`/coin/${coin.id}`)}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <td className="px-3 py-3.5">
+                    <td className="px-3 py-3.5" onClick={e => e.stopPropagation()}>
                       <button
-                        onClick={() => toggle(coin)}
+                        onClick={() => handleToggle(coin)}
                         title={isWatched(coin.id) ? 'Watchlist\'ten çıkar' : 'Watchlist\'e ekle'}
-                        style={{
-                          color: isWatched(coin.id) ? '#f59e0b' : 'var(--text-muted)',
-                          fontSize: '16px',
-                          lineHeight: 1,
-                          transition: 'color 0.15s, transform 0.15s',
-                          cursor: 'pointer',
-                          transform: isWatched(coin.id) ? 'scale(1.15)' : 'scale(1)',
-                        }}
+                        className={`star-btn ${animatingId === coin.id ? (isWatched(coin.id) ? 'watched' : 'unwatched-anim') : ''}`}
+                        style={{ color: isWatched(coin.id) ? '#f59e0b' : 'var(--text-muted)', fontSize: '17px' }}
                       >
                         {isWatched(coin.id) ? '★' : '☆'}
                       </button>

@@ -1,4 +1,6 @@
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import CoinTable from './components/CoinTable';
+import CoinDetailPage from './pages/CoinDetailPage';
 import { useTheme } from './hooks/useTheme';
 import IbisPulseLogo from './components/IbisPulseLogo';
 
@@ -28,11 +30,14 @@ function SunIcon() {
 
 export default function App() {
   const { theme, toggle } = useTheme();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen px-4 py-8 max-w-6xl mx-auto">
       <header className="flex items-center justify-between mb-8">
-        <IbisPulseLogo />
+        <div className="cursor-pointer" onClick={() => navigate('/')}>
+          <IbisPulseLogo />
+        </div>
 
         <button
           onClick={toggle}
@@ -50,7 +55,10 @@ export default function App() {
       </header>
 
       <main>
-        <CoinTable />
+        <Routes>
+          <Route path="/" element={<CoinTable />} />
+          <Route path="/coin/:coinId" element={<CoinDetailPage />} />
+        </Routes>
       </main>
     </div>
   );

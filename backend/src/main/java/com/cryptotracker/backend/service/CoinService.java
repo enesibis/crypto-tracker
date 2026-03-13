@@ -3,6 +3,7 @@ package com.cryptotracker.backend.service;
 import com.cryptotracker.backend.dto.CoinDto;
 import com.cryptotracker.backend.dto.CoinGeckoMarketDto;
 import com.cryptotracker.backend.dto.PagedResponse;
+import com.cryptotracker.backend.dto.PriceHistoryDto;
 import com.cryptotracker.backend.entity.Coin;
 import com.cryptotracker.backend.entity.CoinPrice;
 import com.cryptotracker.backend.entity.PriceHistory;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -38,6 +40,30 @@ public class CoinService {
             "volume24hUsd",  "price.volume24hUsd",
             "priceChange24h","price.priceChange24h"
     );
+
+    @Transactional(readOnly = true)
+    public Optional<CoinDto> getCoinById(String coinId) {
+        return coinRepository.findById(coinId).map(coin -> new CoinDto(
+                coin.getId(),
+                coin.getSymbol(),
+                coin.getName(),
+                coin.getImageUrl(),
+                coin.getPrice().getPriceUsd(),
+                coin.getPrice().getMarketCapUsd(),
+                coin.getPrice().getVolume24hUsd(),
+                coin.getPrice().getPriceChange24h(),
+                coin.getPrice().getLastUpdated()
+        ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PriceHistoryDto> getHistory(String coinId, int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        return priceHistoryRepository.findByCoinIdAndRecordedAtAfter(coinId, since)
+                .stream()
+                .map(ph -> new PriceHistoryDto(ph.getRecordedAt(), ph.getPriceUsd()))
+                .toList();
+    }
 
     @Transactional(readOnly = true)
     public PagedResponse<CoinDto> getCoins(int page, int size, String search, String sortBy, String sortDir) {
