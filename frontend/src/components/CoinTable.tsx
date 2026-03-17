@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Coin } from '../types/coin';
 import { useWatchlist } from '../hooks/useWatchlist';
+import { useAuth } from '../context/AuthContext';
+import { usePriceStream } from '../hooks/usePriceStream';
 
 interface PagedResponse {
   content: Coin[];
@@ -51,9 +53,20 @@ export default function CoinTable() {
   const [showWatchlist, setShowWatchlist] = useState(false);
   const prevPrices = useRef<Record<string, number>>({});
   const [animatingId, setAnimatingId] = useState<string | null>(null);
-  const { watchlist, isWatched, toggle, updatePrices } = useWatchlist();
+  const { watchlist, isWatched, toggle, updatePrices, synced } = useWatchlist();
+  const { isLoggedIn } = useAuth();
+  const [toast, setToast] = useState(false);
+
+  const streamStatus = usePriceStream(() => {
+    fetchCoins(page, search, sortBy, sortDir);
+  });
 
   function handleToggle(coin: Coin) {
+    if (!isLoggedIn) {
+      setToast(true);
+      setTimeout(() => setToast(false), 2000);
+      return;
+    }
     toggle(coin);
     setAnimatingId(coin.id);
     setTimeout(() => setAnimatingId(null), 400);
@@ -97,6 +110,7 @@ export default function CoinTable() {
     setTableKey(k => k + 1);
   }
 
+  const watchlistLoading = showWatchlist && !synced;
   const displayCoins = showWatchlist ? watchlist : (data?.content ?? []);
   const coins = displayCoins;
   const totalPages = showWatchlist ? 1 : (data?.totalPages ?? 1);
@@ -118,6 +132,29 @@ export default function CoinTable() {
 
   return (
     <div>
+      {/* Login toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(59,130,246,0.4)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3), 0 0 20px rgba(59,130,246,0.15)',
+            animation: 'modalPop 0.25s cubic-bezier(0.22,1,0.36,1) both',
+            whiteSpace: 'nowrap',
+          }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+            Watchlist için giriş yapmanız gerekiyor
+          </p>
+          <button
+            onClick={() => { setToast(false); window.location.href = '/auth'; }}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            Giriş Yap
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4 gap-4">
         {/* Sekmeler */}
@@ -173,9 +210,24 @@ export default function CoinTable() {
             onBlur={e => (e.target.style.borderColor = 'var(--border)')}
           />
         </div>
-        <p className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
-          {totalElements.toLocaleString()} coin{lastUpdate && ` · ${lastUpdate.toLocaleTimeString('tr-TR')}`}
-        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{
+                background: streamStatus === 'live' ? 'var(--positive)' : streamStatus === 'connecting' ? '#f59e0b' : 'var(--negative)',
+                boxShadow: streamStatus === 'live' ? '0 0 6px var(--positive)' : 'none',
+                animation: streamStatus === 'live' ? 'pulse 2s infinite' : 'none',
+              }}
+            />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {streamStatus === 'live' ? 'LIVE' : streamStatus === 'connecting' ? 'Bağlanıyor...' : 'Bağlantı kesildi'}
+            </span>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            · {totalElements.toLocaleString()} coin{lastUpdate && ` · ${lastUpdate.toLocaleTimeString('tr-TR')}`}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
@@ -203,13 +255,26 @@ export default function CoinTable() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="text-center py-20">
-                  <div className="inline-block w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
-                    style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
-                </td>
-              </tr>
+            {loading || watchlistLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td className="px-3 py-3.5"><div className="skeleton w-7 h-7 rounded-lg" /></td>
+                  <td className="px-4 py-3.5"><div className="skeleton w-5 h-3.5" /></td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="skeleton w-8 h-8 rounded-full" />
+                      <div className="flex flex-col gap-1.5">
+                        <div className="skeleton w-24 h-3.5" />
+                        <div className="skeleton w-10 h-2.5" />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-right"><div className="skeleton w-20 h-3.5 ml-auto" /></td>
+                  <td className="px-4 py-3.5 text-right"><div className="skeleton w-14 h-5 ml-auto rounded-lg" /></td>
+                  <td className="px-4 py-3.5 text-right hidden md:table-cell"><div className="skeleton w-16 h-3.5 ml-auto" /></td>
+                  <td className="px-4 py-3.5 text-right hidden lg:table-cell"><div className="skeleton w-16 h-3.5 ml-auto" /></td>
+                </tr>
+              ))
             ) : coins.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-center py-20 text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -223,7 +288,7 @@ export default function CoinTable() {
                 const flashClass = prev == null ? '' : coin.priceUsd > prev ? 'flash-up' : coin.priceUsd < prev ? 'flash-down' : '';
                 return (
                   <tr key={`${tableKey}-${coin.id}`}
-                    className={`row-enter ${flashClass}`}
+                    className={`coin-row row-enter ${flashClass}`}
                     style={{ borderBottom: '1px solid var(--border)', animationDelay: `${index * 30}ms`, cursor: 'pointer' }}
                     onClick={() => navigate(`/coin/${coin.id}`)}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}

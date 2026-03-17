@@ -1,5 +1,6 @@
 package com.cryptotracker.backend.dto;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -13,4 +14,4 @@ public record CoinDto(
     BigDecimal volume24hUsd,
     BigDecimal priceChange24h,
     LocalDateTime lastUpdated
-) {}
+) implements Serializable {}

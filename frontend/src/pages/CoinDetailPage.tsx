@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useCountUp } from '../hooks/useCountUp';
+import { useAuth } from '../context/AuthContext';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -49,6 +51,11 @@ const DAYS_OPTIONS = [
 export default function CoinDetailPage() {
   const { coinId } = useParams<{ coinId: string }>();
   const navigate = useNavigate();
+  const { isLoggedIn, authFetch } = useAuth();
+  const [portfolioModal, setPortfolioModal] = useState(false);
+  const [qty, setQty] = useState('');
+  const [buyPrice, setBuyPrice] = useState('');
+  const [portfolioSaving, setPortfolioSaving] = useState(false);
   const [coin, setCoin] = useState<Coin | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [days, setDays] = useState(7);
@@ -85,6 +92,11 @@ export default function CoinDetailPage() {
       .catch(console.error)
       .finally(() => setNewsLoading(false));
   }, [coin]);
+
+  // Hook'lar her zaman çağrılmalı (Rules of Hooks)
+  const animatedPrice = useCountUp(coin?.priceUsd ?? 0, 900);
+  const animatedMarketCap = useCountUp(coin?.marketCapUsd ?? 0, 1100);
+  const animatedVolume = useCountUp(coin?.volume24hUsd ?? 0, 1000);
 
   if (loading) {
     return (
@@ -136,17 +148,80 @@ export default function CoinDetailPage() {
         Geri
       </button>
 
+      {/* Portfolio modal */}
+      {portfolioModal && coin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setPortfolioModal(false)}>
+          <div className="w-full max-w-sm rounded-2xl p-6"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animation: 'modalPop 0.25s cubic-bezier(0.22,1,0.36,1) both' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-5">
+              <img src={coin.imageUrl} alt={coin.name} className="w-9 h-9 rounded-full" />
+              <h2 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{coin.name} — Portfolio</h2>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Miktar</label>
+                <input type="number" min="0" step="any" value={qty} onChange={e => setQty(e.target.value)}
+                  placeholder="0.00" className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border)')} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  Alış Fiyatı (USD)
+                  <button className="ml-2 text-xs cursor-pointer" style={{ color: 'var(--accent)' }}
+                    onClick={() => setBuyPrice(String(coin.priceUsd))}>
+                    Güncel fiyatı kullan
+                  </button>
+                </label>
+                <input type="number" min="0" step="any" value={buyPrice} onChange={e => setBuyPrice(e.target.value)}
+                  placeholder={`$${coin.priceUsd}`} className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border)')} />
+              </div>
+              <div className="flex gap-2 mt-1">
+                <button onClick={() => setPortfolioModal(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium cursor-pointer"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  İptal
+                </button>
+                <button disabled={portfolioSaving} onClick={async () => {
+                  setPortfolioSaving(true);
+                  await authFetch('/api/portfolio', { method: 'POST', body: JSON.stringify({ coinId: coin.id, quantity: parseFloat(qty), buyPrice: parseFloat(buyPrice) }) });
+                  setPortfolioSaving(false);
+                  setPortfolioModal(false);
+                  navigate('/portfolio');
+                }} className="flex-1 py-2.5 rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-60"
+                  style={{ background: 'var(--accent)', color: '#fff' }}>
+                  {portfolioSaving ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Coin başlık */}
       <div className="flex items-center gap-4 mb-8">
         <img src={coin.imageUrl} alt={coin.name} className="w-14 h-14 rounded-full" />
-        <div>
-          <div className="flex items-baseline gap-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{coin.name}</h1>
             <span className="text-sm uppercase font-medium" style={{ color: 'var(--text-muted)' }}>{coin.symbol}</span>
+            {isLoggedIn && (
+              <button onClick={() => { setBuyPrice(''); setQty(''); setPortfolioModal(true); }}
+                className="px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer"
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)' }}>
+                + Portfolio'ya Ekle
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-xl font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-              ${formatPrice(coin.priceUsd)}
+              ${formatPrice(animatedPrice)}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold"
               style={{
@@ -162,8 +237,8 @@ export default function CoinDetailPage() {
       {/* İstatistikler */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Piyasa Değeri', value: formatLargeNumber(coin.marketCapUsd) },
-          { label: '24s Hacim', value: formatLargeNumber(coin.volume24hUsd) },
+          { label: 'Piyasa Değeri', value: formatLargeNumber(animatedMarketCap) },
+          { label: '24s Hacim', value: formatLargeNumber(animatedVolume) },
           { label: 'Son Güncelleme', value: new Date(coin.lastUpdated).toLocaleTimeString('tr-TR') },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>

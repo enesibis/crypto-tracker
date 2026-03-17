@@ -12,6 +12,8 @@ import com.cryptotracker.backend.repository.CoinRepository;
 import com.cryptotracker.backend.repository.PriceHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -56,6 +58,7 @@ public class CoinService {
         ));
     }
 
+    @Cacheable(value = "history", key = "#coinId + '-' + #days")
     @Transactional(readOnly = true)
     public List<PriceHistoryDto> getHistory(String coinId, int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
@@ -65,6 +68,7 @@ public class CoinService {
                 .toList();
     }
 
+    @Cacheable(value = "coins", key = "#page + '-' + #size + '-' + #search + '-' + #sortBy + '-' + #sortDir")
     @Transactional(readOnly = true)
     public PagedResponse<CoinDto> getCoins(int page, int size, String search, String sortBy, String sortDir) {
         String jpaField = SORT_FIELDS.getOrDefault(sortBy, "price.marketCapUsd");
@@ -93,6 +97,7 @@ public class CoinService {
     // Sadece ilk sayfadan (top 100) history kaydedilir, geri kalanlar sadece fiyat güncellenir
     private static final int HISTORY_LIMIT = 100;
 
+    @CacheEvict(value = {"coins", "coin", "history"}, allEntries = true)
     @Transactional
     public void upsertCoins(List<CoinGeckoMarketDto> marketData, int rankOffset) {
         LocalDateTime now = LocalDateTime.now();
