@@ -5,9 +5,11 @@ import com.cryptotracker.backend.dto.PortfolioRequest;
 import com.cryptotracker.backend.entity.Coin;
 import com.cryptotracker.backend.entity.CoinPrice;
 import com.cryptotracker.backend.entity.PortfolioEntry;
+import com.cryptotracker.backend.entity.PortfolioSnapshot;
 import com.cryptotracker.backend.entity.User;
 import com.cryptotracker.backend.repository.CoinRepository;
 import com.cryptotracker.backend.repository.PortfolioRepository;
+import com.cryptotracker.backend.repository.PortfolioSnapshotRepository;
 import com.cryptotracker.backend.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.ResponseEntity;
@@ -28,13 +30,16 @@ public class PortfolioController {
     private final PortfolioRepository portfolioRepository;
     private final UserRepository userRepository;
     private final CoinRepository coinRepository;
+    private final PortfolioSnapshotRepository snapshotRepository;
 
     public PortfolioController(PortfolioRepository portfolioRepository,
                                UserRepository userRepository,
-                               CoinRepository coinRepository) {
+                               CoinRepository coinRepository,
+                               PortfolioSnapshotRepository snapshotRepository) {
         this.portfolioRepository = portfolioRepository;
         this.userRepository = userRepository;
         this.coinRepository = coinRepository;
+        this.snapshotRepository = snapshotRepository;
     }
 
     private User getUser(UserDetails principal) {
@@ -81,6 +86,36 @@ public class PortfolioController {
         User user = getUser(principal);
         portfolioRepository.deleteByUserAndCoinId(user, coinId);
         return ResponseEntity.ok(Map.of("status", "deleted"));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<?> getHistory(@AuthenticationPrincipal UserDetails principal) {
+        User user = getUser(principal);
+        return ResponseEntity.ok(snapshotRepository.findByUserOrderByRecordedAtAsc(user)
+            .stream()
+            .map(s -> Map.of("date", s.getRecordedAt().toString(), "value", s.getTotalValue()))
+            .toList());
+    }
+
+    public void takeSnapshot(User user) {
+        List<PortfolioEntry> entries = portfolioRepository.findByUser(user);
+        if (entries.isEmpty()) return;
+        // Son 24 saatte zaten snapshot alındıysa tekrar alma
+        long recentCount = snapshotRepository.countByUserSince(user, LocalDateTime.now().minusHours(23));
+        if (recentCount > 0) return;
+
+        BigDecimal total = entries.stream()
+            .map(e -> {
+                CoinPrice price = e.getCoin().getPrice();
+                BigDecimal p = price != null ? price.getPriceUsd() : BigDecimal.ZERO;
+                return e.getQuantity().multiply(p);
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        PortfolioSnapshot snapshot = new PortfolioSnapshot();
+        snapshot.setUser(user);
+        snapshot.setTotalValue(total);
+        snapshotRepository.save(snapshot);
     }
 
     private PortfolioEntryDto toDto(PortfolioEntry e) {

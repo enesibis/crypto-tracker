@@ -1,6 +1,10 @@
 package com.cryptotracker.backend.scheduler;
 
+import com.cryptotracker.backend.controller.PortfolioController;
 import com.cryptotracker.backend.controller.PriceStreamController;
+import com.cryptotracker.backend.entity.User;
+import com.cryptotracker.backend.repository.UserRepository;
+import com.cryptotracker.backend.service.AlertCheckService;
 import com.cryptotracker.backend.service.CoinGeckoClient;
 import com.cryptotracker.backend.service.CoinService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +20,9 @@ public class PriceFetchScheduler {
     private final CoinGeckoClient coinGeckoClient;
     private final CoinService coinService;
     private final PriceStreamController priceStreamController;
+    private final AlertCheckService alertCheckService;
+    private final PortfolioController portfolioController;
+    private final UserRepository userRepository;
 
     private static final int PER_PAGE = 250;
     private static final int TOTAL_PAGES = 8; // top 2000 coin
@@ -38,5 +45,13 @@ public class PriceFetchScheduler {
         }
         log.info("Fiyat güncelleme tamamlandı. {} SSE istemcisine bildirim gönderiliyor.", priceStreamController.getConnectedClients());
         priceStreamController.broadcastUpdate();
+        alertCheckService.checkAlerts();
+
+        // Tüm kullanıcılar için portfolio snapshot al
+        for (User user : userRepository.findAll()) {
+            try { portfolioController.takeSnapshot(user); } catch (Exception e) {
+                log.warn("Snapshot alınamadı user={}: {}", user.getId(), e.getMessage());
+            }
+        }
     }
 }

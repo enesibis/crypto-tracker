@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+} from 'recharts';
 
 interface PortfolioEntry {
   coinId: string;
@@ -28,17 +32,21 @@ function formatPrice(n: number): string {
   return n.toFixed(6);
 }
 
-function formatLarge(n: number): string {
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(2)}K`;
-  return `$${formatPrice(n)}`;
+function formatLarge(n: number, sym = '$'): string {
+  if (n >= 1e9) return `${sym}${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${sym}${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${sym}${(n / 1e3).toFixed(2)}K`;
+  return `${sym}${formatPrice(n)}`;
 }
+
+interface SnapshotPoint { date: string; value: number; }
 
 export default function PortfolioPage() {
   const { authFetch, isLoggedIn } = useAuth();
+  const { symbol, convert } = useCurrency();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<PortfolioEntry[]>([]);
+  const [snapshots, setSnapshots] = useState<SnapshotPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -50,6 +58,15 @@ export default function PortfolioPage() {
       .then(r => r.json())
       .then(setEntries)
       .finally(() => setLoading(false));
+    authFetch('/api/portfolio/history')
+      .then(r => r.json())
+      .then((data: { date: string; value: number }[]) => {
+        setSnapshots(data.map(s => ({
+          date: new Date(s.date).toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' }),
+          value: s.value,
+        })));
+      })
+      .catch(() => {});
   }, [isLoggedIn, authFetch]);
 
   async function handleSave() {
@@ -85,6 +102,10 @@ export default function PortfolioPage() {
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
   const isPos = totalPnl >= 0;
 
+  const chartData = snapshots.map(s => ({ ...s, value: convert(s.value) }));
+  const chartMin = chartData.length > 0 ? Math.min(...chartData.map(s => s.value)) * 0.98 : 0;
+  const chartMax = chartData.length > 0 ? Math.max(...chartData.map(s => s.value)) * 1.02 : 0;
+
   if (!isLoggedIn) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -104,9 +125,9 @@ export default function PortfolioPage() {
       {entries.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Toplam Değer', value: formatLarge(totalValue), accent: false },
-            { label: 'Toplam Maliyet', value: formatLarge(totalCost), accent: false },
-            { label: 'Kar / Zarar', value: `${totalPnl >= 0 ? '+' : ''}${formatLarge(Math.abs(totalPnl))}`, accent: true, pos: isPos },
+            { label: 'Toplam Değer', value: formatLarge(convert(totalValue), symbol), accent: false },
+            { label: 'Toplam Maliyet', value: formatLarge(convert(totalCost), symbol), accent: false },
+            { label: 'Kar / Zarar', value: `${totalPnl >= 0 ? '+' : ''}${formatLarge(convert(Math.abs(totalPnl)), symbol)}`, accent: true, pos: isPos },
             { label: 'Değişim', value: `${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%`, accent: true, pos: isPos },
           ].map(({ label, value, accent, pos }) => (
             <div key={label} className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -117,6 +138,33 @@ export default function PortfolioPage() {
               </p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Portfolio Geçmişi Grafiği */}
+      {chartData.length > 1 && (
+        <div className="rounded-2xl p-5 mb-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <h2 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>Portfolio Geçmişi</h2>
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} tickLine={false} interval="preserveStartEnd" />
+              <YAxis domain={[chartMin, chartMax]} tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} tickLine={false} axisLine={false}
+                tickFormatter={v => `${symbol}${v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)}`} />
+              <Tooltip
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }}
+                formatter={(v: number) => [`${symbol}${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, 'Değer']}
+              />
+              <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2}
+                fill="url(#portfolioGrad)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       )}
 

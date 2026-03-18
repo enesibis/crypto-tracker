@@ -5,6 +5,8 @@ import com.cryptotracker.backend.dto.LoginRequest;
 import com.cryptotracker.backend.dto.RegisterRequest;
 import com.cryptotracker.backend.service.AuthService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -34,6 +36,17 @@ public class AuthController {
         try {
             AuthResponse res = authService.login(req);
             return ResponseEntity.ok(res);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> req,
+                                            @AuthenticationPrincipal UserDetails principal) {
+        try {
+            authService.changePassword(principal.getUsername(), req.get("currentPassword"), req.get("newPassword"));
+            return ResponseEntity.ok(Map.of("status", "ok"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

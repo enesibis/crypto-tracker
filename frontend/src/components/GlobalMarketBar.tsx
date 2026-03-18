@@ -162,6 +162,7 @@ export default function GlobalMarketBar() {
           valueColor="#f7931a"
           icon={<BtcIcon />}
         />
+
       </div>
     </div>
   );

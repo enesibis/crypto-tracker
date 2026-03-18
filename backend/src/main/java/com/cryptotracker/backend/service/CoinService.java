@@ -94,6 +94,25 @@ public class CoinService {
         return new PagedResponse<>(content, page, size, coinPage.getTotalElements(), coinPage.getTotalPages());
     }
 
+    @Transactional(readOnly = true)
+    public List<CoinDto> getTopGainers(int limit) {
+        return coinRepository.findTopGainers(PageRequest.of(0, limit))
+                .stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CoinDto> getTopLosers(int limit) {
+        return coinRepository.findTopLosers(PageRequest.of(0, limit))
+                .stream().map(this::toDto).toList();
+    }
+
+    private CoinDto toDto(Coin coin) {
+        return new CoinDto(coin.getId(), coin.getSymbol(), coin.getName(), coin.getImageUrl(),
+                coin.getPrice().getPriceUsd(), coin.getPrice().getMarketCapUsd(),
+                coin.getPrice().getVolume24hUsd(), coin.getPrice().getPriceChange24h(),
+                coin.getPrice().getLastUpdated());
+    }
+
     // Sadece ilk sayfadan (top 100) history kaydedilir, geri kalanlar sadece fiyat güncellenir
     private static final int HISTORY_LIMIT = 100;
 

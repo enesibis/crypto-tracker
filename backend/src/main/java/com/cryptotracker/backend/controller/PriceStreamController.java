@@ -47,6 +47,18 @@ public class PriceStreamController {
         emitters.removeAll(dead);
     }
 
+    public void broadcastAlert(String payload) {
+        List<SseEmitter> dead = new java.util.ArrayList<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().name("alert-triggered").data(payload));
+            } catch (IOException e) {
+                dead.add(emitter);
+            }
+        }
+        emitters.removeAll(dead);
+    }
+
     public int getConnectedClients() {
         return emitters.size();
     }

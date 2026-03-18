@@ -4,6 +4,7 @@ import type { Coin } from '../types/coin';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useAuth } from '../context/AuthContext';
 import { usePriceStream } from '../hooks/usePriceStream';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface PagedResponse {
   content: Coin[];
@@ -22,10 +23,10 @@ function formatPrice(price: number): string {
 }
 
 function formatLargeNumber(n: number): string {
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  return `$${n.toLocaleString()}`;
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  return n.toLocaleString();
 }
 
 const PAGE_SIZE = 20;
@@ -54,12 +55,16 @@ export default function CoinTable() {
   const prevPrices = useRef<Record<string, number>>({});
   const [animatingId, setAnimatingId] = useState<string | null>(null);
   const { watchlist, isWatched, toggle, updatePrices, synced } = useWatchlist();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, email } = useAuth();
+  const { symbol, convert } = useCurrency();
   const [toast, setToast] = useState(false);
+  const [suggestions, setSuggestions] = useState<Coin[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const streamStatus = usePriceStream(() => {
     fetchCoins(page, search, sortBy, sortDir);
-  });
+  }, email);
 
   function handleToggle(coin: Coin) {
     if (!isLoggedIn) {
@@ -97,6 +102,29 @@ export default function CoinTable() {
     const t = setTimeout(() => { setPage(0); setSearch(searchInput); }, 400);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // Arama önerileri
+  useEffect(() => {
+    if (!searchInput.trim()) { setSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/coins?page=0&size=6&search=${encodeURIComponent(searchInput)}`)
+        .then(r => r.json())
+        .then(d => setSuggestions(d.content || []))
+        .catch(() => {});
+    }, 200);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Dışarı tıklayınca kapat
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   function handleSort(field: SortField) {
     if (sortBy === field) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
@@ -194,8 +222,8 @@ export default function CoinTable() {
           </button>
         </div>
 
-        <div className="relative flex-1 max-w-sm">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }}
+        <div className="relative flex-1 max-w-sm" ref={searchRef}>
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10" style={{ color: 'var(--text-muted)' }}
             fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
@@ -203,12 +231,45 @@ export default function CoinTable() {
             type="text"
             placeholder="Coin ara..."
             value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
+            autoComplete="off"
+            onChange={e => { setSearchInput(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && suggestions.length > 0) {
+                navigate(`/coin/${suggestions[0].id}`);
+                setShowSuggestions(false);
+              }
+              if (e.key === 'Escape') setShowSuggestions(false);
+            }}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-            onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
             onBlur={e => (e.target.style.borderColor = 'var(--border)')}
           />
+          {/* Öneriler dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl overflow-hidden shadow-xl z-30"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+              {suggestions.map((c, i) => (
+                <button key={c.id}
+                  onMouseDown={() => { navigate(`/coin/${c.id}`); setShowSuggestions(false); setSearchInput(''); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left cursor-pointer"
+                  style={{ background: i === 0 ? 'var(--bg-secondary)' : 'transparent', border: 'none', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = i === 0 ? 'var(--bg-secondary)' : 'transparent')}
+                >
+                  <img src={c.imageUrl} alt={c.name} className="w-6 h-6 rounded-full flex-shrink-0" />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{c.name}</span>
+                  <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>{c.symbol?.toUpperCase()}</span>
+                  <span className="text-xs ml-auto font-mono" style={{ color: 'var(--text-secondary)' }}>
+                    {symbol}{formatPrice(convert(c.priceUsd))}
+                  </span>
+                </button>
+              ))}
+              <div className="px-4 py-2 text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+                Enter ile ilk sonuca git
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1.5">
@@ -314,7 +375,7 @@ export default function CoinTable() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      ${formatPrice(coin.priceUsd)}
+                      {symbol}{formatPrice(convert(coin.priceUsd))}
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold"
@@ -326,10 +387,10 @@ export default function CoinTable() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right hidden md:table-cell text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {formatLargeNumber(coin.marketCapUsd)}
+                      {symbol}{formatLargeNumber(convert(coin.marketCapUsd))}
                     </td>
                     <td className="px-4 py-3.5 text-right hidden lg:table-cell text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {formatLargeNumber(coin.volume24hUsd)}
+                      {symbol}{formatLargeNumber(convert(coin.volume24hUsd))}
                     </td>
                   </tr>
                 );

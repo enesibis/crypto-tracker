@@ -32,6 +32,15 @@ public class CoinController {
         return ResponseEntity.ok(coinService.getHistory(id, days));
     }
 
+    @GetMapping("/trending")
+    public ResponseEntity<?> getTrending(@RequestParam(defaultValue = "5") int limit) {
+        limit = Math.min(limit, 20);
+        return ResponseEntity.ok(java.util.Map.of(
+            "gainers", coinService.getTopGainers(limit),
+            "losers",  coinService.getTopLosers(limit)
+        ));
+    }
+
     @GetMapping
     public ResponseEntity<PagedResponse<CoinDto>> getCoins(
             @RequestParam(defaultValue = "0") int page,

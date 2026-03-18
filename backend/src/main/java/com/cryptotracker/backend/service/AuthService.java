@@ -45,4 +45,14 @@ public class AuthService {
         String token = jwtUtil.generateToken(req.email());
         return new AuthResponse(token, req.email());
     }
+
+    public void changePassword(String email, String currentPassword, String newPassword) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new IllegalStateException("Kullanıcı bulunamadı"));
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("Mevcut şifre hatalı.");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
 }
