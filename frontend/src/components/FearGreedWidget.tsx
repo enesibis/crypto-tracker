@@ -93,7 +93,7 @@ export default function FearGreedWidget() {
             })}
             {/* Track */}
             <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`}
-              fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="9" strokeLinecap="round" />
+              fill="none" stroke="var(--border)" strokeWidth="9" strokeLinecap="round" />
             {/* Value arc */}
             <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`}
               fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
