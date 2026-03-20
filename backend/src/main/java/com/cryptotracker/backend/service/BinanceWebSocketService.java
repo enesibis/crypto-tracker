@@ -91,6 +91,9 @@ public class BinanceWebSocketService {
         }
     }
 
+    private int flushCounter = 0;
+    private static final int HISTORY_INTERVAL = 30; // 30 × 2s = 60s
+
     /** Her 2 saniyede bir bekleyen fiyatları DB'ye yaz, SSE'ye yayınla */
     @Scheduled(fixedRate = 2000)
     public void flushUpdates() {
@@ -98,8 +101,10 @@ public class BinanceWebSocketService {
 
         Map<String, BigDecimal[]> snapshot = new ConcurrentHashMap<>(pendingUpdates);
         pendingUpdates.clear();
+        flushCounter++;
 
-        Map<String, double[]> updated = coinService.bulkUpdatePricesFromBinance(snapshot);
+        boolean storeHistory = (flushCounter % HISTORY_INTERVAL == 0);
+        Map<String, double[]> updated = coinService.bulkUpdatePricesFromBinance(snapshot, storeHistory);
         if (!updated.isEmpty()) {
             priceStreamController.broadcastPrices(updated);
             alertCheckService.checkAlerts();

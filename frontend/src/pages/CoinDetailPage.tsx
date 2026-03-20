@@ -41,11 +41,15 @@ function formatLargeNumber(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-const DAYS_OPTIONS = [
-  { label: '1G', value: 1 },
-  { label: '7G', value: 7 },
-  { label: '30G', value: 30 },
-  { label: '90G', value: 90 },
+type Period = { label: string; query: string; isHours: boolean };
+const PERIODS: Period[] = [
+  { label: '1S',  query: 'hours=1',  isHours: true  },
+  { label: '4S',  query: 'hours=4',  isHours: true  },
+  { label: '12S', query: 'hours=12', isHours: true  },
+  { label: '1G',  query: 'days=1',   isHours: false },
+  { label: '7G',  query: 'days=7',   isHours: false },
+  { label: '30G', query: 'days=30',  isHours: false },
+  { label: '90G', query: 'days=90',  isHours: false },
 ];
 
 export default function CoinDetailPage() {
@@ -58,7 +62,7 @@ export default function CoinDetailPage() {
   const [portfolioSaving, setPortfolioSaving] = useState(false);
   const [coin, setCoin] = useState<Coin | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [days, setDays] = useState(7);
+  const [period, setPeriod] = useState<Period>(PERIODS[4]); // 7G default
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -76,12 +80,12 @@ export default function CoinDetailPage() {
   useEffect(() => {
     if (!coinId) return;
     setHistoryLoading(true);
-    fetch(`/api/coins/${coinId}/history?days=${days}`)
+    fetch(`/api/coins/${coinId}/history?${period.query}`)
       .then(r => r.json())
       .then((data: HistoryPoint[]) => setHistory(data))
       .catch(console.error)
       .finally(() => setHistoryLoading(false));
-  }, [coinId, days]);
+  }, [coinId, period]);
 
   useEffect(() => {
     if (!coin) return;
@@ -254,7 +258,7 @@ export default function CoinDetailPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-              {days}g değişim
+              {period.label} değişim
             </p>
             {history.length >= 2 && (
               <p className="text-sm font-semibold" style={{ color: priceDiff >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
@@ -265,18 +269,23 @@ export default function CoinDetailPage() {
               </p>
             )}
           </div>
-          <div className="flex gap-1">
-            {DAYS_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setDays(opt.value)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={days === opt.value
-                  ? { background: 'var(--accent)', color: '#fff' }
-                  : { color: 'var(--text-muted)', background: 'transparent' }}
-              >
-                {opt.label}
-              </button>
+          <div className="flex gap-1 flex-wrap justify-end">
+            {PERIODS.map((opt, i) => (
+              <>
+                {i === 3 && (
+                  <div key="sep" style={{ width: 1, background: 'var(--border)', margin: '2px 4px' }} />
+                )}
+                <button
+                  key={opt.query}
+                  onClick={() => setPeriod(opt)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                  style={period.query === opt.query
+                    ? { background: 'var(--accent)', color: '#fff' }
+                    : { color: 'var(--text-muted)', background: 'transparent' }}
+                >
+                  {opt.label}
+                </button>
+              </>
             ))}
           </div>
         </div>
@@ -305,9 +314,10 @@ export default function CoinDetailPage() {
                 dataKey="recordedAt"
                 tickFormatter={(v: string) => {
                   const d = new Date(v);
-                  return days <= 1
-                    ? d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-                    : d.toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' });
+                  if (period.isHours || period.query === 'days=1') {
+                    return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                  }
+                  return d.toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' });
                 }}
                 tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                 axisLine={false}

@@ -60,10 +60,20 @@ public class CoinService {
         ));
     }
 
-    @Cacheable(value = "history", key = "#coinId + '-' + #days")
+    @Cacheable(value = "history", key = "#coinId + '-d' + #days")
     @Transactional(readOnly = true)
     public List<PriceHistoryDto> getHistory(String coinId, int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
+        return priceHistoryRepository.findByCoinIdAndRecordedAtAfter(coinId, since)
+                .stream()
+                .map(ph -> new PriceHistoryDto(ph.getRecordedAt(), ph.getPriceUsd()))
+                .toList();
+    }
+
+    @Cacheable(value = "history", key = "#coinId + '-h' + #hours")
+    @Transactional(readOnly = true)
+    public List<PriceHistoryDto> getHistoryByHours(String coinId, int hours) {
+        LocalDateTime since = LocalDateTime.now().minusHours(hours);
         return priceHistoryRepository.findByCoinIdAndRecordedAtAfter(coinId, since)
                 .stream()
                 .map(ph -> new PriceHistoryDto(ph.getRecordedAt(), ph.getPriceUsd()))
@@ -167,9 +177,9 @@ public class CoinService {
      * @param updates symbol → [price, change24h, volume] (change/volume null olabilir)
      * @return symbol → [price, change24h] map (SSE'ye broadcast edilmek üzere)
      */
-    @CacheEvict(value = {"coins", "coin"}, allEntries = true)
+    @CacheEvict(value = {"coins", "coin", "history"}, allEntries = true)
     @Transactional
-    public Map<String, double[]> bulkUpdatePricesFromBinance(Map<String, BigDecimal[]> updates) {
+    public Map<String, double[]> bulkUpdatePricesFromBinance(Map<String, BigDecimal[]> updates, boolean storeHistory) {
         Map<String, double[]> result = new HashMap<>();
         LocalDateTime now = LocalDateTime.now();
 
@@ -179,7 +189,7 @@ public class CoinService {
 
             List<Coin> coins = coinRepository.findBySymbol(symbol);
             if (coins.isEmpty()) continue;
-            Coin coin = coins.get(0); // market cap'e göre en büyüğünü al
+            Coin coin = coins.get(0);
 
             coinPriceRepository.findByCoinId(coin.getId()).ifPresent(cp -> {
                 cp.setPriceUsd(values[0]);
@@ -187,6 +197,15 @@ public class CoinService {
                 if (values[2] != null) cp.setVolume24hUsd(values[2]);
                 cp.setLastUpdated(now);
                 coinPriceRepository.save(cp);
+
+                // Dakikada bir history snapshot al (saatlik grafik için)
+                if (storeHistory) {
+                    PriceHistory history = new PriceHistory();
+                    history.setCoin(coin);
+                    history.setPriceUsd(values[0]);
+                    history.setRecordedAt(now);
+                    priceHistoryRepository.save(history);
+                }
 
                 double change = values[1] != null ? values[1].doubleValue()
                         : (cp.getPriceChange24h() != null ? cp.getPriceChange24h().doubleValue() : 0.0);
