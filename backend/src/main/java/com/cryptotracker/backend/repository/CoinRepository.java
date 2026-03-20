@@ -12,6 +12,9 @@ import java.util.List;
 
 public interface CoinRepository extends JpaRepository<Coin, String> {
 
+    // symbol benzersiz olmayabilir (farklı coinler aynı sembolü paylaşabilir)
+    List<Coin> findBySymbol(String symbol);
+
     @EntityGraph(attributePaths = {"price"})
     @Query(value = "SELECT c FROM Coin c JOIN c.price p " +
                    "WHERE (:search = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) " +

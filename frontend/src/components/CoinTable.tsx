@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Coin } from '../types/coin';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useAuth } from '../context/AuthContext';
-import { usePriceStream } from '../hooks/usePriceStream';
+import { usePriceStream, type PriceMap } from '../hooks/usePriceStream';
 import { useCurrency } from '../context/CurrencyContext';
 
 interface PagedResponse {
@@ -62,8 +62,25 @@ export default function CoinTable() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const streamStatus = usePriceStream(() => {
-    fetchCoins(page, search, sortBy, sortDir);
+  const streamStatus = usePriceStream((prices: PriceMap) => {
+    if (Object.keys(prices).length > 0) {
+      // Binance'ten fiyat datası geldi → tabloyu re-fetch yapmadan güncelle
+      setData(prev => {
+        if (!prev) return prev;
+        const updated = prev.content.map(coin => {
+          const entry = prices[coin.symbol];
+          if (!entry) return coin;
+          const [newPrice, newChange] = entry;
+          prevPrices.current[coin.id] = coin.priceUsd;
+          return { ...coin, priceUsd: newPrice, priceChange24h: newChange };
+        });
+        return { ...prev, content: updated };
+      });
+      setLastUpdate(new Date());
+    } else {
+      // CoinGecko timestamp geldi → tam re-fetch
+      fetchCoins(page, search, sortBy, sortDir);
+    }
   }, email);
 
   function handleToggle(coin: Coin) {

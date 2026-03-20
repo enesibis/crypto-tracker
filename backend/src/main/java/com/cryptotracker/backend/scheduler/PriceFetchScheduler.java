@@ -1,10 +1,9 @@
 package com.cryptotracker.backend.scheduler;
 
 import com.cryptotracker.backend.controller.PortfolioController;
-import com.cryptotracker.backend.controller.PriceStreamController;
 import com.cryptotracker.backend.entity.User;
 import com.cryptotracker.backend.repository.UserRepository;
-import com.cryptotracker.backend.service.AlertCheckService;
+import com.cryptotracker.backend.service.BinanceWebSocketService;
 import com.cryptotracker.backend.service.CoinGeckoClient;
 import com.cryptotracker.backend.service.CoinService;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +18,7 @@ public class PriceFetchScheduler {
 
     private final CoinGeckoClient coinGeckoClient;
     private final CoinService coinService;
-    private final PriceStreamController priceStreamController;
-    private final AlertCheckService alertCheckService;
+    private final BinanceWebSocketService binanceWebSocketService;
     private final PortfolioController portfolioController;
     private final UserRepository userRepository;
 
@@ -43,9 +41,8 @@ public class PriceFetchScheduler {
                 try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
             }
         }
-        log.info("Fiyat güncelleme tamamlandı. {} SSE istemcisine bildirim gönderiliyor.", priceStreamController.getConnectedClients());
-        priceStreamController.broadcastUpdate();
-        alertCheckService.checkAlerts();
+        log.info("CoinGecko metadata güncellendi. Binance WebSocket yeniden bağlanıyor...");
+        binanceWebSocketService.reconnect(); // Yeni coin listesiyle Binance'e yeniden bağlan
 
         // Tüm kullanıcılar için portfolio snapshot al
         for (User user : userRepository.findAll()) {

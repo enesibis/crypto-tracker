@@ -20,7 +20,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -158,5 +160,39 @@ public class CoinService {
             }
         }
         log.info("{} coin güncellendi (offset={}).", marketData.size(), rankOffset);
+    }
+
+    /**
+     * Binance WebSocket'ten gelen toplu fiyat güncellemelerini DB'ye yazar.
+     * @param updates symbol → [price, change24h, volume] (change/volume null olabilir)
+     * @return symbol → [price, change24h] map (SSE'ye broadcast edilmek üzere)
+     */
+    @CacheEvict(value = {"coins", "coin"}, allEntries = true)
+    @Transactional
+    public Map<String, double[]> bulkUpdatePricesFromBinance(Map<String, BigDecimal[]> updates) {
+        Map<String, double[]> result = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Map.Entry<String, BigDecimal[]> entry : updates.entrySet()) {
+            String symbol = entry.getKey();
+            BigDecimal[] values = entry.getValue(); // [price, change24h, volume]
+
+            List<Coin> coins = coinRepository.findBySymbol(symbol);
+            if (coins.isEmpty()) continue;
+            Coin coin = coins.get(0); // market cap'e göre en büyüğünü al
+
+            coinPriceRepository.findByCoinId(coin.getId()).ifPresent(cp -> {
+                cp.setPriceUsd(values[0]);
+                if (values[1] != null) cp.setPriceChange24h(values[1]);
+                if (values[2] != null) cp.setVolume24hUsd(values[2]);
+                cp.setLastUpdated(now);
+                coinPriceRepository.save(cp);
+
+                double change = values[1] != null ? values[1].doubleValue()
+                        : (cp.getPriceChange24h() != null ? cp.getPriceChange24h().doubleValue() : 0.0);
+                result.put(symbol, new double[]{values[0].doubleValue(), change});
+            });
+        }
+        return result;
     }
 }

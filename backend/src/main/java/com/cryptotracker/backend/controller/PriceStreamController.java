@@ -1,5 +1,7 @@
 package com.cryptotracker.backend.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -7,14 +9,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/prices")
 public class PriceStreamController {
 
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @GetMapping("/stream")
     public SseEmitter stream() {
@@ -34,12 +40,27 @@ public class PriceStreamController {
         return emitter;
     }
 
+    // CoinGecko scheduler tarafından çağrılır (timestamp ile)
     public void broadcastUpdate() {
-        String timestamp = Instant.now().toString();
-        List<SseEmitter> dead = new java.util.ArrayList<>();
+        send("prices-updated", Instant.now().toString());
+    }
+
+    // Binance WebSocket tarafından çağrılır (fiyat datası ile)
+    // prices: symbol → [price, change24h]
+    public void broadcastPrices(Map<String, double[]> prices) {
+        if (prices.isEmpty()) return;
+        try {
+            send("prices-updated", objectMapper.writeValueAsString(prices));
+        } catch (Exception e) {
+            log.error("SSE broadcastPrices hata: {}", e.getMessage());
+        }
+    }
+
+    private void send(String eventName, String data) {
+        List<SseEmitter> dead = new ArrayList<>();
         for (SseEmitter emitter : emitters) {
             try {
-                emitter.send(SseEmitter.event().name("prices-updated").data(timestamp));
+                emitter.send(SseEmitter.event().name(eventName).data(data));
             } catch (IOException e) {
                 dead.add(emitter);
             }
@@ -48,15 +69,7 @@ public class PriceStreamController {
     }
 
     public void broadcastAlert(String payload) {
-        List<SseEmitter> dead = new java.util.ArrayList<>();
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().name("alert-triggered").data(payload));
-            } catch (IOException e) {
-                dead.add(emitter);
-            }
-        }
-        emitters.removeAll(dead);
+        send("alert-triggered", payload);
     }
 
     public int getConnectedClients() {
