@@ -25,10 +25,10 @@ public interface CoinRepository extends JpaRepository<Coin, String> {
     Page<Coin> findCoins(@Param("search") String search, Pageable pageable);
 
     @EntityGraph(attributePaths = {"price"})
-    @Query("SELECT c FROM Coin c JOIN c.price p ORDER BY p.priceChange24h DESC")
+    @Query("SELECT c FROM Coin c JOIN c.price p WHERE p.priceChange24h IS NOT NULL ORDER BY p.priceChange24h DESC")
     List<Coin> findTopGainers(Pageable pageable);
 
     @EntityGraph(attributePaths = {"price"})
-    @Query("SELECT c FROM Coin c JOIN c.price p ORDER BY p.priceChange24h ASC")
+    @Query("SELECT c FROM Coin c JOIN c.price p WHERE p.priceChange24h IS NOT NULL ORDER BY p.priceChange24h ASC")
     List<Coin> findTopLosers(Pageable pageable);
 }

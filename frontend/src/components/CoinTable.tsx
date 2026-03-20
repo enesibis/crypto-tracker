@@ -52,7 +52,6 @@ export default function CoinTable() {
   const [tableKey, setTableKey] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showWatchlist, setShowWatchlist] = useState(false);
-  const prevPrices = useRef<Record<string, number>>({});
   const [animatingId, setAnimatingId] = useState<string | null>(null);
   const { watchlist, isWatched, toggle, updatePrices, synced } = useWatchlist();
   const { isLoggedIn, email } = useAuth();
@@ -71,7 +70,6 @@ export default function CoinTable() {
           const entry = prices[coin.symbol];
           if (!entry) return coin;
           const [newPrice, newChange] = entry;
-          prevPrices.current[coin.id] = coin.priceUsd;
           return { ...coin, priceUsd: newPrice, priceChange24h: newChange };
         });
         return { ...prev, content: updated };
@@ -99,10 +97,6 @@ export default function CoinTable() {
       const params = new URLSearchParams({ page: String(p), size: String(PAGE_SIZE), search: q, sortBy: field, sortDir: dir });
       const res = await fetch(`/api/coins?${params}`);
       const json: PagedResponse = await res.json();
-      // Fiyat değişimlerini kaydet (flash için)
-      const newPrices: Record<string, number> = {};
-      json.content.forEach(c => { newPrices[c.id] = c.priceUsd; });
-      prevPrices.current = newPrices;
       setData(json);
       setLastUpdate(new Date());
       updatePrices(json.content);
@@ -362,11 +356,9 @@ export default function CoinTable() {
             ) : (
               coins.map((coin, index) => {
                 const isPos = coin.priceChange24h >= 0;
-                const prev = prevPrices.current[coin.id];
-                const flashClass = prev == null ? '' : coin.priceUsd > prev ? 'flash-up' : coin.priceUsd < prev ? 'flash-down' : '';
                 return (
                   <tr key={`${tableKey}-${coin.id}`}
-                    className={`coin-row row-enter ${flashClass}`}
+                    className="coin-row row-enter"
                     style={{ borderBottom: '1px solid var(--border)', animationDelay: `${index * 30}ms`, cursor: 'pointer' }}
                     onClick={() => navigate(`/coin/${coin.id}`)}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
